@@ -20,7 +20,7 @@ COPY --from=builder /app/config.json ./config.json
 COPY --from=builder /app/public ./public
 
 # ✅ 手动修复 public 的权限：授予写权限给 nextjs 用户
-RUN chown -R nextjs:nodejs /app/public && chmod -R 755 /app/public
+RUN chown -R nextjs:nodejs /app/public && chmod -R 777 /app/public
 
 # ✅ 复制静态资源
 COPY --from=builder /app/.next/static ./.next/static
