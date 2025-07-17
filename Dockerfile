@@ -1,3 +1,19 @@
+# ---- 第 1 阶段：安装依赖 ----
+FROM node:20-alpine AS deps
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+# ---- 第 2 阶段：构建项目 ----
+FROM node:20-alpine AS builder
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ENV DOCKER_ENV=true
+RUN pnpm run build
+
 # ---- 第 3 阶段：生成运行时镜像 ----
 FROM node:20-alpine AS runner
 
@@ -10,25 +26,19 @@ ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV DOCKER_ENV=true
 
-# 从构建器复制生产构建内容
+# 从 builder 阶段复制构建产物（确保这个 AS builder 存在）
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/start.js ./start.js
 COPY --from=builder /app/config.json ./config.json
 
-# ✅ 复制 public，并手动修复权限（避免 Alpine 限制）
+# 修复 public 权限
 COPY --from=builder /app/public ./public
-
-# ✅ 手动修复 public 的权限：授予写权限给 nextjs 用户
 RUN chown -R nextjs:nodejs /app/public && chmod -R 777 /app/public
 
-# ✅ 复制静态资源
+# 静态资源
 COPY --from=builder /app/.next/static ./.next/static
 
-# 切换到非 root 用户运行
 USER nextjs
-
 EXPOSE 3000
-
-# 启动应用
 CMD ["node", "start.js"]
